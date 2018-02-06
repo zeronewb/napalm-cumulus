@@ -507,3 +507,32 @@ class CumulusDriver(NetworkDriver):
                     interfaces_ip[interface][ip_ver][ip] = {'prefix_length': int(prefix)}
 
         return interfaces_ip
+
+    def get_config(self, retrieve=u'all'):
+        # Initialise the configuration dictionary
+        configuration = {}
+        configuration['running'] = ""
+        configuration['startup'] = ""
+        configuration['candidate'] = ""
+
+        if retrieve == 'all' or retrieve == 'running':
+            # Get net show configuration output.
+            output = self._send_command('net show configuration')
+
+            configuration['running'] = py23_compat.text_type(output)
+
+        if retrieve == 'all' or retrieve == 'candidate':
+            # Get net pending output.
+            output = self._send_command('net pending json')
+            try:
+                output_json = json.loads(output)
+            except ValueError:
+                output_json = json.loads(self.device.send_command('net pending json'))
+
+            configuration['candidate'] = py23_compat.text_type(output_json)
+
+        if retrieve == 'all' or retrieve == 'startup':
+            # Empty since there is no startup config.
+            configuration['startup'] = ''
+
+        return configuration
