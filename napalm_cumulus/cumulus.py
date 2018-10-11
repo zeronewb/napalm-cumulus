@@ -376,7 +376,7 @@ class CumulusDriver(NetworkDriver):
     def get_lldp_neighbors(self):
         """Cumulus get_lldp_neighbors."""
         lldp = {}
-        command = 'sudo net show lldp json'
+        command = 'sudo net show interface all json'
 
         try:
             lldp_output = json.loads(self._send_command(command))
