@@ -376,16 +376,17 @@ class CumulusDriver(NetworkDriver):
     def get_lldp_neighbors(self):
         """Cumulus get_lldp_neighbors."""
         lldp = {}
-        command = 'sudo net show lldp json'
+        command = 'sudo net show interface all json'
 
         try:
-            lldp_output = json.loads(self._send_command(command))
+            intf_output = json.loads(self._send_command(command))
         except ValueError:
-            lldp_output = json.loads(self.device.send_command(command))
+            intf_output = json.loads(self.device.send_command(command))
 
-        for interface in lldp_output:
-            lldp[interface] = self._get_interface_neighbors(
-                                    lldp_output[interface]['iface_obj']['lldp'])
+        for interface in intf_output:
+            if intf_output[interface]['iface_obj']['lldp'] is not None:
+                lldp[interface] = self._get_interface_neighbors(
+                                        intf_output[interface]['iface_obj']['lldp'])
         return lldp
 
     def get_interfaces(self):

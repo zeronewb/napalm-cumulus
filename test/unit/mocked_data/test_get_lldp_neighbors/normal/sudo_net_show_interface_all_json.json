@@ -257,5 +257,56 @@
         "summary": [
             "IP: 192.168.102.115/24"
         ]
+    },
+    "vlan301": {
+        "iface_obj": {
+            "lldp": null,
+            "native_vlan": null,
+            "dhcp_enabled": false,
+            "description": "",
+            "vlan": null,
+            "asic": null,
+            "mtu": 9216,
+            "lacp": {
+                "rate": "",
+                "sys_priority": "",
+                "partner_mac": "",
+                "bypass": ""
+            },
+            "mac": "a8:2b:b5:0d:d0:f7",
+            "vlan_filtering": false,
+            "min_links": "",
+            "members": {},
+            "counters": {
+                "RX_ERR": 0,
+                "TX_ERR": 0,
+                "RX_OVR": 0,
+                "TX_OVR": 0,
+                "TX_OK": 68278,
+                "MTU": 9216,
+                "Met": 0,
+                "Flg": "BMRU",
+                "TX_DRP": 0,
+                "RX_OK": 322259,
+                "RX_DRP": 14281
+            },
+            "ip_address": {
+                "allentries": [
+                  "10.233.60.2/22"
+                ]
+            },
+            "vlan_list": [],
+            "ip_neighbors": {
+                "ipv4": [
+                  "48:df:37:55:ef:f0"
+                ],
+                "ipv6": []
+            }
+        },
+        "linkstate": "UP",
+        "summary": "IP: 10.233.60.2/22",
+        "connector_type": "Unknown",
+        "mode": "Interface/L3",
+        "speed": "N/A"
     }
 }
