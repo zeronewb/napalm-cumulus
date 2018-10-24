@@ -508,3 +508,61 @@ class CumulusDriver(NetworkDriver):
                     interfaces_ip[interface][ip_ver][ip] = {'prefix_length': int(prefix)}
 
         return interfaces_ip
+
+    def get_bgp_neighbors(self):
+        vrf = 'global'
+        bgp_neighbors = {vrf: {}}
+        bgp_neighbor = {}
+        supported_afis = ['ipv4 unicast', 'ipv6 unicast']
+        bgp_summary_output = self._send_command('net show bgp summary json')
+        dev_bgp_summary = json.loads(bgp_summary_output)
+        bgp_neighbors_output = self._send_command('net show bgp neighbor json')
+        dev_bgp_neighbors = json.loads(bgp_neighbors_output)
+        for afi in dev_bgp_summary:
+            if not (afi.lower() in supported_afis):
+                continue
+            bgp_neighbors[vrf]['router_id'] = dev_bgp_summary[afi]['routerId']
+            bgp_neighbors[vrf].setdefault("peers", {})
+            for peer in dev_bgp_summary[afi]['peers']:
+                bgp_neighbor = {}
+                bgp_neighbor['local_as'] = dev_bgp_neighbors[peer]['localAs']
+                bgp_neighbor['remote_as'] = dev_bgp_neighbors[peer]['remoteAs']
+                bgp_neighbor['remote_id'] = dev_bgp_neighbors[peer]['remoteRouterId']
+                uptime = dev_bgp_neighbors[peer].get('bgpTimerUpMsec', "")
+                bgp_neighbor['description'] = dev_bgp_neighbors[peer].get("nbrDesc", '')
+                if dev_bgp_neighbors[peer]['bgpState'] == 'Established':
+                    is_up = True
+                else:
+                    is_up = False
+                    uptime = -1
+                if dev_bgp_neighbors[peer].get('adminShutDown', False):
+                    is_enabled = False
+                else:
+                    is_enabled = True
+                bgp_neighbor['is_up'] = is_up
+                bgp_neighbor['is_enabled'] = is_enabled
+                bgp_neighbor['uptime'] = int(uptime / 1000)
+                bgp_neighbor.setdefault("address_family", {})
+                for af, af_details in dev_bgp_neighbors[peer]['addressFamilyInfo'].items():
+                    af = af.lower()
+                    if not (af in supported_afis):
+                        continue
+                    route_info = {}
+                    bgp_peer_advertised_routes = self._send_command('net show bgp {} neighbor {} '
+                                                                    'advertised-routes json'
+                                                                    .format(af, peer))
+                    dev_bgp_peer_advertised_routes = \
+                        json.loads(bgp_peer_advertised_routes.replace('n\n', ''))
+                    peer_advertised_routes = dev_bgp_peer_advertised_routes['totalPrefixCounter']
+                    if not is_enabled:
+                        dev_bgp_summary[af]['peers'][peer]['prefixReceivedCount'] = -1
+                        peer_advertised_routes = -1
+                        af_details['acceptedPrefixCounter'] = -1
+                    route_info['received_prefixes'] = \
+                        dev_bgp_summary[af]['peers'][peer]['prefixReceivedCount']
+                    route_info['sent_prefixes'] = int(peer_advertised_routes)
+                    route_info['accepted_prefixes'] = af_details['acceptedPrefixCounter']
+                    bgp_neighbor['address_family'][af.split()[0]] = route_info
+                bgp_neighbors[vrf]['peers'][peer] = bgp_neighbor
+
+        return bgp_neighbors
