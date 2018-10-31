@@ -376,16 +376,17 @@ class CumulusDriver(NetworkDriver):
     def get_lldp_neighbors(self):
         """Cumulus get_lldp_neighbors."""
         lldp = {}
-        command = 'sudo net show lldp json'
+        command = 'sudo net show interface all json'
 
         try:
-            lldp_output = json.loads(self._send_command(command))
+            intf_output = json.loads(self._send_command(command))
         except ValueError:
-            lldp_output = json.loads(self.device.send_command(command))
+            intf_output = json.loads(self.device.send_command(command))
 
-        for interface in lldp_output:
-            lldp[interface] = self._get_interface_neighbors(
-                                    lldp_output[interface]['iface_obj']['lldp'])
+        for interface in intf_output:
+            if intf_output[interface]['iface_obj']['lldp'] is not None:
+                lldp[interface] = self._get_interface_neighbors(
+                                        intf_output[interface]['iface_obj']['lldp'])
         return lldp
 
     def get_interfaces(self):
@@ -498,7 +499,7 @@ class CumulusDriver(NetworkDriver):
 
         for interface in output_json:
             if not output_json[interface]['iface_obj']['ip_address']['allentries']:
-                interfaces_ip[interface]
+                continue
             else:
                 for ip_address in output_json[interface]['iface_obj']['ip_address']['allentries']:
                     ip_ver = ipaddress.ip_interface(py23_compat.text_type(ip_address)).version
@@ -565,3 +566,25 @@ class CumulusDriver(NetworkDriver):
                 bgp_neighbors[vrf]['peers'][peer] = bgp_neighbor
 
         return bgp_neighbors
+
+    def get_snmp_information(self):
+        snmp_config_output = self._send_command ('net show config snmp')
+        contact, system_name, location,community_value,acl = ("",)*5
+        snmp_information = {}
+        snmp_information.setdefault("community",{})
+        for parse_snmp_value in snmp_config_output.splitlines():
+            if ("readonly-community" or "readonly-community-v6") in parse_snmp_value:
+                community_value =  parse_snmp_value.strip ().split(" ")[1]
+                acl = parse_snmp_value.lstrip ().split(" ")[3]
+                if acl == "any": acl = "N/A"
+                snmp_information["community"][community_value] = {"acl": acl, "mode": "ro"}
+
+            if "system-contact" in parse_snmp_value: contact = parse_snmp_value.strip ().split (" ")[1]
+            if "system-location" in parse_snmp_value: location = parse_snmp_value.strip ().split (" ")[1]
+            if "system-name" in parse_snmp_value: system_name = parse_snmp_value.strip ().split (" ")[1]
+        snmp_information["contact"] = contact
+        snmp_information["chassis_id"] = system_name
+        snmp_information["location"] = location
+        return snmp_information
+
+
