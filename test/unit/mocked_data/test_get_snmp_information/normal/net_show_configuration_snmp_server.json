@@ -1,0 +1,9 @@
+snmp-server
+  listening-address all
+  readonly-community private access 2.2.2.2
+  readonly-community private_multi_host access 10.10.10.1
+  readonly-community private_multi_host access 20.20.20.1
+  readonly-community public_no_acl access any
+  system-contact NOC Dep
+  system-location LAB
+  system-name cumulus-rtr-1
