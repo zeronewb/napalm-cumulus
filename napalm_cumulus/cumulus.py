@@ -571,8 +571,9 @@ class CumulusDriver(NetworkDriver):
         snmp_config_output = self._send_command('net show configuration snmp-server')
         contact = system_name = location = ""
         snmp_information = {}
+        snmp_values = {}
         community_list = []
-        snmp_information.setdefault("community", {})
+        snmp_values.setdefault("community", {})
         for parse_snmp_value in snmp_config_output.splitlines():
             if "readonly-community" in parse_snmp_value or \
                     "readonly-community-v6" in parse_snmp_value:
@@ -597,20 +598,21 @@ class CumulusDriver(NetworkDriver):
                     To best present the authorized-host info in the SNMP object,
                     we show comma separate string of them as key of SNMP community.
                     """
-                    acl = snmp_information["community"][community_value]["acl"] + "," + acl
-                    snmp_information["community"][community_value] = {"acl": acl, "mode": "ro"}
+                    acl = snmp_values["community"][community_value]["acl"] + "," + acl
+                    snmp_values["community"][community_value] = {"acl": acl, "mode": "ro"}
                 else:
                     community_list.append(community_value)
-                    snmp_information["community"][community_value] = {"acl": acl, "mode": "ro"}
+                    snmp_values["community"][community_value] = {"acl": acl, "mode": "ro"}
             system_contact_parse = re.search(r'.*system-contact.(\D.*)', parse_snmp_value.strip())
             if system_contact_parse:
-                contact = str(system_contact_parse.groups()[0])
+                contact = system_contact_parse.groups()[0]
             system_location_parse = re.search(r'.*system-location.(\D.*)', parse_snmp_value.strip())
             if system_location_parse:
-                location = str(system_location_parse.groups()[0])
+                location = system_location_parse.groups()[0]
             system_name_parse = re.search(r'.*system-name.(\D.*)', parse_snmp_value.strip())
             if system_name_parse:
-                system_name = str(system_name_parse.groups()[0])
+                system_name = system_name_parse.groups()[0]
+        snmp_information = snmp_values
         snmp_information["contact"] = contact
         snmp_information["chassis_id"] = system_name
         snmp_information["location"] = location
