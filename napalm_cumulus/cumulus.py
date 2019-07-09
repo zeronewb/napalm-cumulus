@@ -513,6 +513,28 @@ class CumulusDriver(NetworkDriver):
 
         return interfaces_ip
 
+    def get_config(self, retrieve='all'):
+        # Initialise the configuration dictionary
+        configuration = {
+            'startup': '',
+            'running': '',
+            'candidate': '',
+        }
+
+        if retrieve in ('running', 'all'):
+            # Get net show configuration output.
+            output = self._send_command('net show configuration')
+
+            configuration['running'] = py23_compat.text_type(output)
+
+        if retrieve in ('candidate', 'all'):
+            # Get net pending output.
+            output = self._send_command('net pending json')
+
+            configuration['candidate'] = py23_compat.text_type(output)
+
+        return configuration
+
     def get_bgp_neighbors(self):
         vrf = 'global'
         bgp_neighbors = {vrf: {}}

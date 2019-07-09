@@ -1,0 +1,59 @@
+{
+    "diffs": [
+        {
+            "toFileTimestamp": "2018-02-06 16:21:33.826239079 +0000",
+            "content": [
+                "@@ -1,6 +1,6 @@",
+                " 127.0.0.1\tlocalhost",
+                " ::1\t\tlocalhost ip6-localhost ip6-loopback",
+                " ff02::1\t\tip6-allnodes",
+                " ff02::2\t\tip6-allrouters",
+                "",
+                "-127.0.1.1\tcumulus",
+                "+127.0.1.1\ttest_hostname_pending"
+            ],
+            "fromFile": "/etc/hosts",
+            "fromFileTimestamp": "/etc/hosts",
+            "toFile": "/var/run/nclu/netmisc/etc_hosts"
+        },
+        {
+            "toFileTimestamp": "2018-02-06 16:21:33.826239079 +0000",
+            "content": [
+                "@@ -1,11 +1,11 @@",
+                " # This script sets the machine hostname to the hostname sent from the DHCP server.",
+                " # If you want to enable this script, change SETHOSTNAME to \"yes\"",
+                " # Copyright 2013, 2015, 2017, Cumulus Networks, Inc.  All rights reserved.",
+                "",
+                "-SETHOSTNAME=\"yes\"",
+                "+SETHOSTNAME=\"no\"",
+                "",
+                " if [ $SETHOSTNAME = \"yes\" ] && [ ! -z $new_host_name ]",
+                " then",
+                "     hostname $new_host_name",
+                "     sed --in-place -e \"/127\\.0\\.1\\.1/s/^.*$/127.0.1.1  $new_host_name/\" /etc/hosts",
+                " fi"
+            ],
+            "fromFile": "/etc/dhcp/dhclient-exit-hooks.d/dhcp-sethostname",
+            "fromFileTimestamp": "/etc/dhcp/dhclient-exit-hooks.d/dhcp-sethostname",
+            "toFile": "/var/run/nclu/netmisc/etc_dhcp_sethostname"
+        },
+        {
+            "toFileTimestamp": "2018-02-06 16:21:33.823237602 +0000",
+            "content": [
+                "@@ -1 +1 @@",
+                "-cumulus",
+                "+test_hostname_pending"
+            ],
+            "fromFile": "/etc/hostname",
+            "fromFileTimestamp": "/etc/hostname",
+            "toFile": "/var/run/nclu/netmisc/etc_hostname"
+        }
+    ],
+    "commands": [
+        {
+            "timestamp": "2018-02-06 16:21:33.827443",
+            "command": "net add hostname test_hostname_pending",
+            "user": "root"
+        }
+    ]
+}

@@ -1,0 +1,41 @@
+
+interface lo
+
+interface eth0
+  address dhcp
+
+hostname cumulus
+
+log syslog informational
+
+dot1x
+  mab-activation-delay 30
+  eap-reauth-period 0
+
+  radius
+    accounting-port 1813
+    authentication-port 1812
+
+time
+
+  zone
+    Etc/UTC
+
+  ntp
+
+    servers
+      0.cumulusnetworks.pool.ntp.org iburst
+      1.cumulusnetworks.pool.ntp.org iburst
+      2.cumulusnetworks.pool.ntp.org iburst
+      3.cumulusnetworks.pool.ntp.org iburst
+
+    source
+      eth0
+
+dns
+
+  nameserver
+    10.0.2.3
+
+snmp-server
+  listening-address localhost
