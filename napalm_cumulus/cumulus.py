@@ -134,10 +134,10 @@ class CumulusDriver(NetworkDriver):
     def compare_config(self):
         if self.loaded:
             diff = self._send_command('sudo net pending')
-            return re.sub('\x1b\[\d+m', '', diff)
+            return re.sub(r'\x1b\[\d+m', '', diff)
         return ''
 
-    def commit_config(self):
+    def commit_config(self, message=""):
         if self.loaded:
             self._send_command('sudo net commit')
             self.changed = True
@@ -248,7 +248,7 @@ class CumulusDriver(NetworkDriver):
                 # 'remote' contains '*' if the machine synchronized with NTP server
                 synchronized = "*" in remote
 
-                match = re.search("(\d+\.\d+\.\d+\.\d+)", remote)
+                match = re.search(r'(\d+\.\d+\.\d+\.\d+)', remote)
                 ip = match.group(1)
 
                 when = when if when != '-' else 0
@@ -324,7 +324,7 @@ class CumulusDriver(NetworkDriver):
             else:
                 rtt_info = rtt_info[-2]
 
-            match = re.search("([\d\.]+)/([\d\.]+)/([\d\.]+)/([\d\.]+)", rtt_info)
+            match = re.search(r"([\d\.]+)/([\d\.]+)/([\d\.]+)/([\d\.]+)", rtt_info)
 
             if match is not None:
                 rtt_min = float(match.group(1))
@@ -341,7 +341,7 @@ class CumulusDriver(NetworkDriver):
             response_info = output_ping.split("\n")
 
             for res in response_info:
-                match_res = re.search("from\s([\d\.]+).*time=([\d\.]+)", res)
+                match_res = re.search(r"from\s([\d\.]+).*time=([\d\.]+)", res)
                 if match_res is not None:
                     ping_responses.append(
                       {
@@ -376,16 +376,17 @@ class CumulusDriver(NetworkDriver):
     def get_lldp_neighbors(self):
         """Cumulus get_lldp_neighbors."""
         lldp = {}
-        command = 'sudo net show lldp json'
+        command = 'sudo net show interface all json'
 
         try:
-            lldp_output = json.loads(self._send_command(command))
+            intf_output = json.loads(self._send_command(command))
         except ValueError:
-            lldp_output = json.loads(self.device.send_command(command))
+            intf_output = json.loads(self.device.send_command(command))
 
-        for interface in lldp_output:
-            lldp[interface] = self._get_interface_neighbors(
-                                    lldp_output[interface]['iface_obj']['lldp'])
+        for interface in intf_output:
+            if intf_output[interface]['iface_obj']['lldp'] is not None:
+                lldp[interface] = self._get_interface_neighbors(
+                                        intf_output[interface]['iface_obj']['lldp'])
         return lldp
 
     def get_interfaces(self):
@@ -502,7 +503,7 @@ class CumulusDriver(NetworkDriver):
 
         for interface in output_json:
             if not output_json[interface]['iface_obj']['ip_address']['allentries']:
-                interfaces_ip[interface]
+                continue
             else:
                 for ip_address in output_json[interface]['iface_obj']['ip_address']['allentries']:
                     ip_ver = ipaddress.ip_interface(py23_compat.text_type(ip_address)).version
@@ -511,3 +512,61 @@ class CumulusDriver(NetworkDriver):
                     interfaces_ip[interface][ip_ver][ip] = {'prefix_length': int(prefix)}
 
         return interfaces_ip
+
+    def get_bgp_neighbors(self):
+        vrf = 'global'
+        bgp_neighbors = {vrf: {}}
+        bgp_neighbor = {}
+        supported_afis = ['ipv4 unicast', 'ipv6 unicast']
+        bgp_summary_output = self._send_command('net show bgp summary json')
+        dev_bgp_summary = json.loads(bgp_summary_output)
+        bgp_neighbors_output = self._send_command('net show bgp neighbor json')
+        dev_bgp_neighbors = json.loads(bgp_neighbors_output)
+        for afi in dev_bgp_summary:
+            if not (afi.lower() in supported_afis):
+                continue
+            bgp_neighbors[vrf]['router_id'] = dev_bgp_summary[afi]['routerId']
+            bgp_neighbors[vrf].setdefault("peers", {})
+            for peer in dev_bgp_summary[afi]['peers']:
+                bgp_neighbor = {}
+                bgp_neighbor['local_as'] = dev_bgp_neighbors[peer]['localAs']
+                bgp_neighbor['remote_as'] = dev_bgp_neighbors[peer]['remoteAs']
+                bgp_neighbor['remote_id'] = dev_bgp_neighbors[peer]['remoteRouterId']
+                uptime = dev_bgp_neighbors[peer].get('bgpTimerUpMsec', "")
+                bgp_neighbor['description'] = dev_bgp_neighbors[peer].get("nbrDesc", '')
+                if dev_bgp_neighbors[peer]['bgpState'] == 'Established':
+                    is_up = True
+                else:
+                    is_up = False
+                    uptime = -1
+                if dev_bgp_neighbors[peer].get('adminShutDown', False):
+                    is_enabled = False
+                else:
+                    is_enabled = True
+                bgp_neighbor['is_up'] = is_up
+                bgp_neighbor['is_enabled'] = is_enabled
+                bgp_neighbor['uptime'] = int(uptime / 1000)
+                bgp_neighbor.setdefault("address_family", {})
+                for af, af_details in dev_bgp_neighbors[peer]['addressFamilyInfo'].items():
+                    af = af.lower()
+                    if not (af in supported_afis):
+                        continue
+                    route_info = {}
+                    bgp_peer_advertised_routes = self._send_command('net show bgp {} neighbor {} '
+                                                                    'advertised-routes json'
+                                                                    .format(af, peer))
+                    dev_bgp_peer_advertised_routes = \
+                        json.loads(bgp_peer_advertised_routes.replace('n\n', ''))
+                    peer_advertised_routes = dev_bgp_peer_advertised_routes['totalPrefixCounter']
+                    if not is_enabled:
+                        dev_bgp_summary[af]['peers'][peer]['prefixReceivedCount'] = -1
+                        peer_advertised_routes = -1
+                        af_details['acceptedPrefixCounter'] = -1
+                    route_info['received_prefixes'] = \
+                        dev_bgp_summary[af]['peers'][peer]['prefixReceivedCount']
+                    route_info['sent_prefixes'] = int(peer_advertised_routes)
+                    route_info['accepted_prefixes'] = af_details['acceptedPrefixCounter']
+                    bgp_neighbor['address_family'][af.split()[0]] = route_info
+                bgp_neighbors[vrf]['peers'][peer] = bgp_neighbor
+
+        return bgp_neighbors
