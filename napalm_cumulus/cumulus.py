@@ -592,3 +592,55 @@ class CumulusDriver(NetworkDriver):
                 bgp_neighbors[vrf]['peers'][peer] = bgp_neighbor
 
         return bgp_neighbors
+
+    def get_snmp_information(self):
+        snmp_config_output = self._send_command('net show configuration snmp-server')
+        contact = system_name = location = ""
+        snmp_information = {}
+        snmp_values = {}
+        community_list = []
+        snmp_values.setdefault("community", {})
+        for parse_snmp_value in snmp_config_output.splitlines():
+            if "readonly-community" in parse_snmp_value or \
+                    "readonly-community-v6" in parse_snmp_value:
+                community_value = parse_snmp_value.strip().split()[1]
+                acl = parse_snmp_value.lstrip().split()[3]
+                if acl == "any":
+                    acl = "N/A"
+                if community_value in community_list:
+                    """
+                    Unlike other routers that use ACL for
+                    snmp access-control, Cumulus directly defines
+                    authorized hosts as part of SNMP config.
+                    E.g:
+                    snmp-server
+                       listening-address all
+                       readonly-community private_multi_host access 10.10.10.1
+                       system-contact NOC
+                       system-location LAB
+                       system-name cumulus-rtr-1
+                    This creates a problem as NAPALM snmp object
+                    shows access-list name as key of community string.
+                    To best present the authorized-host info in the SNMP object,
+                    we show comma separate string of them as key of SNMP community.
+                    """
+                    acl = snmp_values["community"][community_value]["acl"] + "," + acl
+                    snmp_values["community"][community_value] = {"acl": acl, "mode": "ro"}
+                else:
+                    community_list.append(community_value)
+                    snmp_values["community"][community_value] = {"acl": acl, "mode": "ro"}
+            system_contact_parse = re.search(r'.*system-contact.(\D.*)', parse_snmp_value.strip())
+            if system_contact_parse:
+                contact = system_contact_parse.groups()[0]
+            system_location_parse = re.search(r'.*system-location.(\D.*)', parse_snmp_value.strip())
+            if system_location_parse:
+                location = system_location_parse.groups()[0]
+            system_name_parse = re.search(r'.*system-name.(\D.*)', parse_snmp_value.strip())
+            if system_name_parse:
+                system_name = system_name_parse.groups()[0]
+        snmp_information = snmp_values
+        snmp_information["contact"] = contact
+        snmp_information["chassis_id"] = system_name
+        snmp_information["location"] = location
+
+        return snmp_information

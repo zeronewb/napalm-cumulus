@@ -1,0 +1,19 @@
+{
+  "contact": "NOC Dep",
+  "chassis_id": "cumulus-rtr-1",
+  "location": "LAB",
+  "community": {
+    "private_multi_host": {
+      "mode": "ro",
+      "acl": "10.10.10.1,20.20.20.1"
+    },
+    "private": {
+      "mode": "ro",
+      "acl": "2.2.2.2"
+    },
+    "public_no_acl": {
+      "mode": "ro",
+      "acl": "N/A"
+    }
+  }
+}
