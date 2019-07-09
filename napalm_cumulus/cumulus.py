@@ -399,25 +399,29 @@ class CumulusDriver(NetworkDriver):
         except ValueError:
             output_json = json.loads(self.device.send_command('sudo net show interface all json'))
 
-        for interface in output_json:
+        for interface in output_json.keys():
             interfaces[interface] = {}
-            if output_json[interface]['iface_obj']['linkstate'] is 0:
-                interfaces[interface]['is_enabled'] = False
-            else:
-                interfaces[interface]['is_enabled'] = True
-
-            if output_json[interface]['iface_obj']['linkstate'] is 2:
-                interfaces[interface]['is_up'] = True
-            else:
+            if output_json[interface]['linkstate'] == "UP":
+                interfaces[interface]['is_up'] = True 
+            elif output_json[interface]['linkstate'] == 'DN':
                 interfaces[interface]['is_up'] = False
+            else:
+                # Link state is an unhandled state
+                interfaces[interface]['is_up'] = False
+
+            interfaces[interface]['is_enabled'] = True
 
             interfaces[interface]['description'] = py23_compat.text_type(
                                             output_json[interface]['iface_obj']['description'])
 
-            if output_json[interface]['iface_obj']['speed'] is None:
+            speed_map = {'100M': 100, '1G': 1000, '10G': 10000, '40G': 40000, '100G': 100000}
+            if output_json[interface]['speed'] is None:
                 interfaces[interface]['speed'] = -1
             else:
-                interfaces[interface]['speed'] = output_json[interface]['iface_obj']['speed']
+                try:
+                    interfaces[interface]['speed'] = speed_map[output_json[interface]['speed']]
+                except KeyError:
+                    interfaces[interface]['speed'] = -1
 
             interfaces[interface]['mac_address'] = py23_compat.text_type(
                                             output_json[interface]['iface_obj']['mac'])
