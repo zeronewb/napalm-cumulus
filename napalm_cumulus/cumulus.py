@@ -28,6 +28,7 @@ from datetime import datetime
 from pytz import timezone
 from collections import defaultdict
 
+
 from netmiko import ConnectHandler
 from netmiko.ssh_exception import NetMikoTimeoutException
 import napalm.base.constants as C
@@ -37,6 +38,7 @@ from napalm.base.base import NetworkDriver
 from napalm.base.exceptions import (
     ConnectionException,
     MergeConfigException,
+    CommandErrorException
     )
 
 
@@ -149,9 +151,9 @@ class CumulusDriver(NetworkDriver):
             self.changed = False
 
     def _send_command(self, command):
-        response = self.device.send_command_timing(command)
+        response = self.device.send_command(command)
         if '[sudo]' in response:
-            response = self.device.send_command_timing(self.sudo_pwd)
+            response = self.device.send_command(self.sudo_pwd)
         return response
 
     def get_facts(self):
@@ -393,100 +395,72 @@ class CumulusDriver(NetworkDriver):
         interfaces = {}
         # Get 'net show interface all json' output.
         output = self._send_command('sudo net show interface all json')
+        #print(self.device.send_command('sudo net show interface all json'))
         # Handling bad send_command_timing return output.
         try:
             output_json = json.loads(output)
         except ValueError:
             output_json = json.loads(self.device.send_command('sudo net show interface all json'))
-
         for interface in output_json.keys():
             interfaces[interface] = {}
             if output_json[interface]['linkstate'] == "UP":
                 interfaces[interface]['is_up'] = True 
+                interfaces[interface]['is_enabled'] = True
             elif output_json[interface]['linkstate'] == 'DN':
                 interfaces[interface]['is_up'] = False
+                interfaces[interface]['is_enabled'] = True
             else:
-                # Link state is an unhandled state
+                # Link state is ADMIN DOWN
                 interfaces[interface]['is_up'] = False
-
-            interfaces[interface]['is_enabled'] = True
-
+                interfaces[interface]['is_enabled'] = False
             interfaces[interface]['description'] = py23_compat.text_type(
                                             output_json[interface]['iface_obj']['description'])
-
             speed_map = {'100M': 100, '1G': 1000, '10G': 10000, '40G': 40000, '100G': 100000}
-            if output_json[interface]['speed'] is None:
+            try:
+                interfaces[interface]['speed'] = speed_map[output_json[interface]['speed']]
+            except KeyError:
                 interfaces[interface]['speed'] = -1
-            else:
-                try:
-                    interfaces[interface]['speed'] = speed_map[output_json[interface]['speed']]
-                except KeyError:
-                    interfaces[interface]['speed'] = -1
 
             interfaces[interface]['mac_address'] = py23_compat.text_type(
                                             output_json[interface]['iface_obj']['mac'])
 
-        # Test if the quagga daemon is running.
-        quagga_test = self._send_command('service quagga status')
-        for line in quagga_test.splitlines():
-            if 'Active:' in line:
-                status = line.split()[1]
-                if 'inactive' in status:
-                    quagga_status = False
-                elif 'active' in status:
-                    quagga_status = True
-                else:
-                    quagga_status = False
-        # If the quagga daemon is running for each interface run the show interface command
-        # to get information about the most recent interface change.
-        if quagga_status:
-            for interface in interfaces.keys():
-                command = "sudo vtysh -c 'show interface %s'" % interface
-                quagga_show_int_output = self._send_command(command)
-                # Get the link up and link down datetimes if available.
-                for line in quagga_show_int_output.splitlines():
-                    if 'Link ups' in line:
-                        if '(never)' in line.split()[4]:
-                            last_flapped_1 = False
-                        else:
-                            last_flapped_1 = True
-                            last_flapped_1_date = line.split()[4] + " " + line.split()[5]
-                            last_flapped_1_date = datetime.strptime(
-                                                last_flapped_1_date, "%Y/%m/%d %H:%M:%S.%f")
-                    if 'Link downs' in line:
-                        if '(never)' in line.split()[4]:
-                            last_flapped_2 = False
-                        else:
-                            last_flapped_2 = True
-                            last_flapped_2_date = line.split()[4] + " " + line.split()[5]
-                            last_flapped_2_date = datetime.strptime(
-                                                last_flapped_2_date, "%Y/%m/%d %H:%M:%S.%f")
-                # Compare the link up and link down datetimes to determine the most recent and
-                # set that as the last flapped after converting to seconds.
-                if last_flapped_1 and last_flapped_2:
-                    last_delta = last_flapped_1_date - last_flapped_2_date
-                    if last_delta.days >= 0:
-                        last_flapped = last_flapped_1_date
-                    else:
-                        last_flapped = last_flapped_2_date
-                elif last_flapped_1:
-                    last_flapped = last_flapped_1_date
-                elif last_flapped_2:
-                    last_flapped = last_flapped_2_date
-                else:
-                    last_flapped = -1
-
-                if last_flapped != -1:
-                    # Get remote timezone.
-                    tmz = self.device.send_command('date +"%Z"')
-                    now_time = datetime.now(timezone(tmz))
-                    last_flapped = last_flapped.replace(tzinfo=timezone(tmz))
-                    last_flapped = (now_time - last_flapped).total_seconds()
-                interfaces[interface]['last_flapped'] = float(last_flapped)
-        # If quagga daemon isn't running set all last_flapped values to -1.
-        if not quagga_status:
+        # Calculate last interface flap time. Dependent on router daemon
+        # Send command to determine if router daemon is running. Not dependent on quagga or frr
+        daemon_check = self._send_command("sudo vtysh -c 'show version'")
+        if 'Exiting: failed to connect to any daemons.' in daemon_check:
             for interface in interfaces.keys():
                 interfaces[interface]['last_flapped'] = -1
+        else:
+            show_int_output = self._send_command("sudo vtysh -c 'show interface'")
+            remote_system_date = self._send_command('date "+%Y/%m/%d %H:%M:%S.%6N"')
+            remote_system_date = datetime.strptime(remote_system_date, "%Y/%m/%d %H:%M:%S.%f")
+            split_int_output = list(filter(None, re.split("(?!Interface Type)Interface", show_int_output)))
+            for block in split_int_output:
+                split_block = block.split("\n")
+                for line in split_block:
+                    if 'line protocol' in line:
+                        interface = line.split()
+                        interface = interface[0]
+                    if 'Link ups' in line:
+                        if int(line.split()[2]) < 2:
+                            never_flapped = True
+                            break
+                        else:
+                            never_flapped = False
+                            last_link_up_date = line.split()[4] + " " + line.split()[5]
+                            last_link_up_date = datetime.strptime(last_link_up_date, "%Y/%m/%d %H:%M:%S.%f")
+                    else: 
+                        never_flapped = False
+                        if 'Link downs' in line:
+                            last_link_down_date = line.split()[4] + " " + line.split()[5]
+                            last_link_down_date = datetime.strptime(last_link_down_date, "%Y/%m/%d %H:%M:%S.%f")
+                if never_flapped:
+                    interfaces[interface]['last_flapped'] = -1
+                else:
+                    if last_link_up_date > last_link_down_date:
+                        interfaces[interface]['last_flapped']  = (remote_system_date - last_link_up_date).total_seconds()
+                    else:
+                        interfaces[interface]['last_flapped']  = (remote_system_date - last_link_down_date).total_seconds()
         return interfaces
 
     def get_interfaces_ip(self):
