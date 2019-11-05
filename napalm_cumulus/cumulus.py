@@ -70,7 +70,7 @@ class CumulusDriver(NetworkDriver):
             'alt_host_keys': False,
             'alt_key_file': '',
             'ssh_config_file': None,
-            'secret': None,
+            'secret': password,
             'allow_agent': False
         }
 
@@ -89,13 +89,8 @@ class CumulusDriver(NetworkDriver):
                                          username=self.username,
                                          password=self.password,
                                          **self.netmiko_optional_args)
-            # Enter root mode.
-            if self.netmiko_optional_args.get('secret'):
-                self.device.enable()
         except NetMikoTimeoutException:
             raise ConnectionException('Cannot connect to {}'.format(self.hostname))
-        except ValueError:
-            raise ConnectionException('Cannot become root.')
 
     def close(self):
         self.device.disconnect()
@@ -122,39 +117,43 @@ class CumulusDriver(NetworkDriver):
 
         candidate = [line for line in candidate if line]
         for command in candidate:
-            if 'sudo' not in command:
-                command = 'sudo {0}'.format(command)
             output = self._send_command(command)
             if "error" in output or "not found" in output:
                 raise MergeConfigException("Command '{0}' cannot be applied.".format(command))
 
     def discard_config(self):
         if self.loaded:
-            self._send_command('sudo net abort')
+            self._send_command('net abort')
             self.loaded = False
 
     def compare_config(self):
         if self.loaded:
-            diff = self._send_command('sudo net pending')
+            diff = self._send_command('net pending')
             return re.sub(r'\x1b\[\d+m', '', diff)
         return ''
 
     def commit_config(self, message=""):
         if self.loaded:
-            self._send_command('sudo net commit')
+            self._send_command('net commit')
             self.changed = True
             self.loaded = False
 
     def rollback(self):
         if self.changed:
-            self._send_command('sudo net rollback last')
+            self._send_command('net rollback last')
             self.changed = False
 
     def _send_command(self, command):
         response = self.device.send_command(command)
-        if '[sudo]' in response:
-            response = self.device.send_command(self.sudo_pwd)
-        return response
+        if 'Permission denied' or 'ERROR: 'in response:
+            try:
+                if self.netmiko_optional_args.get('secret'):
+                    self.device.enable()
+                    response = self.device.send_command(command)
+                    self.device.exit_enable_mode()
+                    return response
+            except ValueError:
+                raise ConnectionException('Super User Elevation Required. Set Netmiko secret argument')
 
     def get_facts(self):
         facts = {
@@ -162,10 +161,10 @@ class CumulusDriver(NetworkDriver):
         }
 
         # Get "net show hostname" output.
-        hostname = self.device.send_command('hostname')
+        hostname = self._send_command('hostname')
 
         # Get "net show system" output.
-        show_system_output = self._send_command('sudo net show system')
+        show_system_output = self._send_command('net show system')
         for line in show_system_output.splitlines():
             if 'build' in line.lower():
                 os_version = line.split()[-1]
@@ -174,18 +173,19 @@ class CumulusDriver(NetworkDriver):
                 uptime = line.split()[-1]
 
         # Get "decode-syseeprom" output.
-        decode_syseeprom_output = self.device.send_command('decode-syseeprom')
+        decode_syseeprom_output = self._send_command('decode-syseeprom')
         for line in decode_syseeprom_output.splitlines():
             if 'serial number' in line.lower():
                 serial_number = line.split()[-1]
 
         # Get "net show interface all json" output.
-        interfaces = self._send_command('sudo net show interface all json')
+        interfaces = self._send_command('net show interface all json')
         # Handling bad send_command_timing return output.
         try:
+            import ipdb; ipdb.set_trace()
             interfaces = json.loads(interfaces)
         except ValueError:
-            interfaces = json.loads(self.device.send_command('sudo net show interface all json'))
+            interfaces = json.loads(self._send_command('net show interface all json'))
 
         facts['hostname'] = facts['fqdn'] = py23_compat.text_type(hostname)
         facts['os_version'] = py23_compat.text_type(os_version)
@@ -206,7 +206,7 @@ class CumulusDriver(NetworkDriver):
         10.129.2.97              ether   00:50:56:9f:64:09   C                     eth0
         192.168.1.3              ether   00:50:56:86:7b:06   C                     eth1
         """
-        output = self.device.send_command('arp -n')
+        output = self._send_command('arp -n')
         output = output.split("\n")
         output = output[1:]
         arp_table = list()
@@ -238,7 +238,7 @@ class CumulusDriver(NetworkDriver):
          133.130.120.204 133.243.238.164  2 u   46   64  377    7.717  987996. 1669.77
         """
 
-        output = self.device.send_command("ntpq -np")
+        output = self._send_command("ntpq -np")
         output = output.split("\n")[2:]
         ntp_stats = list()
 
@@ -291,7 +291,7 @@ class CumulusDriver(NetworkDriver):
             command += "interface %s " % source
 
         ping_result = dict()
-        output_ping = self.device.send_command(command)
+        output_ping = self._send_command(command)
 
         if "Unknown host" in output_ping:
             err = "Unknown host"
@@ -378,12 +378,12 @@ class CumulusDriver(NetworkDriver):
     def get_lldp_neighbors(self):
         """Cumulus get_lldp_neighbors."""
         lldp = {}
-        command = 'sudo net show interface all json'
+        command = 'net show interface all json'
 
         try:
             intf_output = json.loads(self._send_command(command))
         except ValueError:
-            intf_output = json.loads(self.device.send_command(command))
+            intf_output = json.loads(self._send_command(command))
 
         for interface in intf_output:
             if intf_output[interface]['iface_obj']['lldp'] is not None:
@@ -394,13 +394,13 @@ class CumulusDriver(NetworkDriver):
     def get_interfaces(self):
         interfaces = {}
         # Get 'net show interface all json' output.
-        output = self._send_command('sudo net show interface all json')
-        #print(self.device.send_command('sudo net show interface all json'))
+        output = self._send_command('net show interface all json')
+        #print(self._send_command('net show interface all json'))
         # Handling bad send_command_timing return output.
         try:
             output_json = json.loads(output)
         except ValueError:
-            output_json = json.loads(self.device.send_command('sudo net show interface all json'))
+            output_json = json.loads(self._send_commandmand('net show interface all json'))
         for interface in output_json.keys():
             interfaces[interface] = {}
             if output_json[interface]['linkstate'] == "UP":
@@ -465,12 +465,12 @@ class CumulusDriver(NetworkDriver):
 
     def get_interfaces_ip(self):
         # Get net show interface all json output.
-        output = self._send_command('sudo net show interface all json')
+        output = self._send_command('net show interface all json')
         # Handling bad send_command_timing return output.
         try:
             output_json = json.loads(output)
         except ValueError:
-            output_json = json.loads(self.device.send_command('sudo net show interface all json'))
+            output_json = json.loads(self._send_command('net show interface all json'))
 
         def rec_dd(): return defaultdict(rec_dd)
         interfaces_ip = rec_dd()
