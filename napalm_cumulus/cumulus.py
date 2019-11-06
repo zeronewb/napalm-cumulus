@@ -28,7 +28,6 @@ from datetime import datetime
 from pytz import timezone
 from collections import defaultdict
 
-
 from netmiko import ConnectHandler
 from netmiko.ssh_exception import NetMikoTimeoutException
 import napalm.base.constants as C
@@ -37,8 +36,7 @@ from napalm.base.utils import string_parsers
 from napalm.base.base import NetworkDriver
 from napalm.base.exceptions import (
     ConnectionException,
-    MergeConfigException,
-    CommandErrorException
+    MergeConfigException
     )
 
 
@@ -420,7 +418,6 @@ class CumulusDriver(NetworkDriver):
 
             interfaces[interface]['mac_address'] = py23_compat.text_type(
                                             output_json[interface]['iface_obj']['mac'])
-
         # Calculate last interface flap time. Dependent on router daemon
         # Send command to determine if router daemon is running. Not dependent on quagga or frr
         daemon_check = self._send_command("sudo vtysh -c 'show version'")
@@ -469,12 +466,7 @@ class CumulusDriver(NetworkDriver):
             output_json = json.loads(output)
         except ValueError:
             output_json = json.loads(self.device.send_command('net show interface all json'))
-
-        #def rec_dd(): return defaultdict(rec_dd)
-        #interfaces_ip = rec_dd()
-
         for interface in output_json:
-            import ipdb; ipdb.set_trace()
             if not output_json[interface]['iface_obj']['ip_address']['allentries']:
                 continue
             else:
