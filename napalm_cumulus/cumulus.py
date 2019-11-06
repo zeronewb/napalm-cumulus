@@ -182,10 +182,9 @@ class CumulusDriver(NetworkDriver):
         interfaces = self._send_command('net show interface all json')
         # Handling bad send_command_timing return output.
         try:
-            import ipdb; ipdb.set_trace()
             interfaces = json.loads(interfaces)
         except ValueError:
-            interfaces = json.loads(self._send_command('net show interface all json'))
+            interfaces = json.loads(self.device.send_command('net show interface all json'))
 
         facts['hostname'] = facts['fqdn'] = py23_compat.text_type(hostname)
         facts['os_version'] = py23_compat.text_type(os_version)
@@ -238,7 +237,7 @@ class CumulusDriver(NetworkDriver):
          133.130.120.204 133.243.238.164  2 u   46   64  377    7.717  987996. 1669.77
         """
 
-        output = self._send_command("ntpq -np")
+        output = self._send_command("net show time ntp servers")
         output = output.split("\n")[2:]
         ntp_stats = list()
 
@@ -268,7 +267,6 @@ class CumulusDriver(NetworkDriver):
                     "offset": float(offset),
                     "jitter": float(jitter)
                 })
-
         return ntp_stats
 
     def ping(self,
@@ -383,7 +381,7 @@ class CumulusDriver(NetworkDriver):
         try:
             intf_output = json.loads(self._send_command(command))
         except ValueError:
-            intf_output = json.loads(self._send_command(command))
+            intf_output = json.loads(self.device.send_command(command))
 
         for interface in intf_output:
             if intf_output[interface]['iface_obj']['lldp'] is not None:
@@ -395,12 +393,11 @@ class CumulusDriver(NetworkDriver):
         interfaces = {}
         # Get 'net show interface all json' output.
         output = self._send_command('net show interface all json')
-        #print(self._send_command('net show interface all json'))
         # Handling bad send_command_timing return output.
         try:
             output_json = json.loads(output)
         except ValueError:
-            output_json = json.loads(self._send_commandmand('net show interface all json'))
+            output_json = json.loads(self.device.send_command('net show interface all json'))
         for interface in output_json.keys():
             interfaces[interface] = {}
             if output_json[interface]['linkstate'] == "UP":
@@ -464,18 +461,20 @@ class CumulusDriver(NetworkDriver):
         return interfaces
 
     def get_interfaces_ip(self):
+        interfaces_ip = {}
         # Get net show interface all json output.
         output = self._send_command('net show interface all json')
         # Handling bad send_command_timing return output.
         try:
             output_json = json.loads(output)
         except ValueError:
-            output_json = json.loads(self._send_command('net show interface all json'))
+            output_json = json.loads(self.device.send_command('net show interface all json'))
 
-        def rec_dd(): return defaultdict(rec_dd)
-        interfaces_ip = rec_dd()
+        #def rec_dd(): return defaultdict(rec_dd)
+        #interfaces_ip = rec_dd()
 
         for interface in output_json:
+            import ipdb; ipdb.set_trace()
             if not output_json[interface]['iface_obj']['ip_address']['allentries']:
                 continue
             else:
@@ -483,7 +482,7 @@ class CumulusDriver(NetworkDriver):
                     ip_ver = ipaddress.ip_interface(py23_compat.text_type(ip_address)).version
                     ip_ver = 'ipv{}'.format(ip_ver)
                     ip, prefix = ip_address.split('/')
-                    interfaces_ip[interface][ip_ver][ip] = {'prefix_length': int(prefix)}
+                    interfaces_ip.update({interface: {ip_ver: {ip: {'prefix_length': int(prefix)}}}})
 
         return interfaces_ip
 
