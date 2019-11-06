@@ -510,7 +510,7 @@ class CumulusDriver(NetworkDriver):
         bgp_neighbors_output = self._send_command('net show bgp neighbor json')
         dev_bgp_neighbors = json.loads(bgp_neighbors_output)
         for afi in dev_bgp_summary:
-            if not (afi.lower() in supported_afis):
+            if not (afi.lower() in supported_afis) or not dev_bgp_summary[afi]:
                 continue
             bgp_neighbors[vrf]['router_id'] = dev_bgp_summary[afi]['routerId']
             bgp_neighbors[vrf].setdefault("peers", {})
