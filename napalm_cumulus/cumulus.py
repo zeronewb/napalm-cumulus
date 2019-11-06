@@ -36,7 +36,7 @@ from napalm.base.utils import string_parsers
 from napalm.base.base import NetworkDriver
 from napalm.base.exceptions import (
     ConnectionException,
-    MergeConfigException,
+    MergeConfigException
     )
 
 
@@ -68,7 +68,7 @@ class CumulusDriver(NetworkDriver):
             'alt_host_keys': False,
             'alt_key_file': '',
             'ssh_config_file': None,
-            'secret': None,
+            'secret': password,
             'allow_agent': False
         }
 
@@ -87,13 +87,8 @@ class CumulusDriver(NetworkDriver):
                                          username=self.username,
                                          password=self.password,
                                          **self.netmiko_optional_args)
-            # Enter root mode.
-            if self.netmiko_optional_args.get('secret'):
-                self.device.enable()
         except NetMikoTimeoutException:
             raise ConnectionException('Cannot connect to {}'.format(self.hostname))
-        except ValueError:
-            raise ConnectionException('Cannot become root.')
 
     def close(self):
         self.device.disconnect()
@@ -120,39 +115,43 @@ class CumulusDriver(NetworkDriver):
 
         candidate = [line for line in candidate if line]
         for command in candidate:
-            if 'sudo' not in command:
-                command = 'sudo {0}'.format(command)
             output = self._send_command(command)
             if "error" in output or "not found" in output:
                 raise MergeConfigException("Command '{0}' cannot be applied.".format(command))
 
     def discard_config(self):
         if self.loaded:
-            self._send_command('sudo net abort')
+            self._send_command('net abort')
             self.loaded = False
 
     def compare_config(self):
         if self.loaded:
-            diff = self._send_command('sudo net pending')
+            diff = self._send_command('net pending')
             return re.sub(r'\x1b\[\d+m', '', diff)
         return ''
 
     def commit_config(self, message=""):
         if self.loaded:
-            self._send_command('sudo net commit')
+            self._send_command('net commit')
             self.changed = True
             self.loaded = False
 
     def rollback(self):
         if self.changed:
-            self._send_command('sudo net rollback last')
+            self._send_command('net rollback last')
             self.changed = False
 
     def _send_command(self, command):
-        response = self.device.send_command_timing(command)
-        if '[sudo]' in response:
-            response = self.device.send_command_timing(self.sudo_pwd)
-        return response
+        response = self.device.send_command(command)
+        if 'Permission denied' or 'ERROR: 'in response:
+            try:
+                if self.netmiko_optional_args.get('secret'):
+                    self.device.enable()
+                    response = self.device.send_command(command)
+                    self.device.exit_enable_mode()
+                    return response
+            except ValueError:
+                raise ConnectionException('Super User Elevation Required. Set Netmiko secret argument')
 
     def get_facts(self):
         facts = {
@@ -160,10 +159,10 @@ class CumulusDriver(NetworkDriver):
         }
 
         # Get "net show hostname" output.
-        hostname = self.device.send_command('hostname')
+        hostname = self._send_command('hostname')
 
         # Get "net show system" output.
-        show_system_output = self._send_command('sudo net show system')
+        show_system_output = self._send_command('net show system')
         for line in show_system_output.splitlines():
             if 'build' in line.lower():
                 os_version = line.split()[-1]
@@ -172,18 +171,18 @@ class CumulusDriver(NetworkDriver):
                 uptime = line.split()[-1]
 
         # Get "decode-syseeprom" output.
-        decode_syseeprom_output = self.device.send_command('decode-syseeprom')
+        decode_syseeprom_output = self._send_command('decode-syseeprom')
         for line in decode_syseeprom_output.splitlines():
             if 'serial number' in line.lower():
                 serial_number = line.split()[-1]
 
         # Get "net show interface all json" output.
-        interfaces = self._send_command('sudo net show interface all json')
+        interfaces = self._send_command('net show interface all json')
         # Handling bad send_command_timing return output.
         try:
             interfaces = json.loads(interfaces)
         except ValueError:
-            interfaces = json.loads(self.device.send_command('sudo net show interface all json'))
+            interfaces = json.loads(self.device.send_command('net show interface all json'))
 
         facts['hostname'] = facts['fqdn'] = py23_compat.text_type(hostname)
         facts['os_version'] = py23_compat.text_type(os_version)
@@ -204,7 +203,7 @@ class CumulusDriver(NetworkDriver):
         10.129.2.97              ether   00:50:56:9f:64:09   C                     eth0
         192.168.1.3              ether   00:50:56:86:7b:06   C                     eth1
         """
-        output = self.device.send_command('arp -n')
+        output = self._send_command('arp -n')
         output = output.split("\n")
         output = output[1:]
         arp_table = list()
@@ -236,7 +235,7 @@ class CumulusDriver(NetworkDriver):
          133.130.120.204 133.243.238.164  2 u   46   64  377    7.717  987996. 1669.77
         """
 
-        output = self.device.send_command("ntpq -np")
+        output = self._send_command("net show time ntp servers")
         output = output.split("\n")[2:]
         ntp_stats = list()
 
@@ -266,7 +265,6 @@ class CumulusDriver(NetworkDriver):
                     "offset": float(offset),
                     "jitter": float(jitter)
                 })
-
         return ntp_stats
 
     def ping(self,
@@ -289,7 +287,7 @@ class CumulusDriver(NetworkDriver):
             command += "interface %s " % source
 
         ping_result = dict()
-        output_ping = self.device.send_command(command)
+        output_ping = self._send_command(command)
 
         if "Unknown host" in output_ping:
             err = "Unknown host"
@@ -376,7 +374,7 @@ class CumulusDriver(NetworkDriver):
     def get_lldp_neighbors(self):
         """Cumulus get_lldp_neighbors."""
         lldp = {}
-        command = 'sudo net show interface all json'
+        command = 'net show interface all json'
 
         try:
             intf_output = json.loads(self._send_command(command))
@@ -392,115 +390,82 @@ class CumulusDriver(NetworkDriver):
     def get_interfaces(self):
         interfaces = {}
         # Get 'net show interface all json' output.
-        output = self._send_command('sudo net show interface all json')
+        output = self._send_command('net show interface all json')
         # Handling bad send_command_timing return output.
         try:
             output_json = json.loads(output)
         except ValueError:
-            output_json = json.loads(self.device.send_command('sudo net show interface all json'))
-
+            output_json = json.loads(self.device.send_command('net show interface all json'))
         for interface in output_json.keys():
             interfaces[interface] = {}
             if output_json[interface]['linkstate'] == "UP":
                 interfaces[interface]['is_up'] = True 
+                interfaces[interface]['is_enabled'] = True
             elif output_json[interface]['linkstate'] == 'DN':
                 interfaces[interface]['is_up'] = False
+                interfaces[interface]['is_enabled'] = True
             else:
-                # Link state is an unhandled state
+                # Link state is ADMIN DOWN
                 interfaces[interface]['is_up'] = False
-
-            interfaces[interface]['is_enabled'] = True
-
+                interfaces[interface]['is_enabled'] = False
             interfaces[interface]['description'] = py23_compat.text_type(
                                             output_json[interface]['iface_obj']['description'])
-
             speed_map = {'100M': 100, '1G': 1000, '10G': 10000, '40G': 40000, '100G': 100000}
-            if output_json[interface]['speed'] is None:
+            try:
+                interfaces[interface]['speed'] = speed_map[output_json[interface]['speed']]
+            except KeyError:
                 interfaces[interface]['speed'] = -1
-            else:
-                try:
-                    interfaces[interface]['speed'] = speed_map[output_json[interface]['speed']]
-                except KeyError:
-                    interfaces[interface]['speed'] = -1
 
             interfaces[interface]['mac_address'] = py23_compat.text_type(
                                             output_json[interface]['iface_obj']['mac'])
-
-        # Test if the quagga daemon is running.
-        quagga_test = self._send_command('service quagga status')
-        for line in quagga_test.splitlines():
-            if 'Active:' in line:
-                status = line.split()[1]
-                if 'inactive' in status:
-                    quagga_status = False
-                elif 'active' in status:
-                    quagga_status = True
-                else:
-                    quagga_status = False
-        # If the quagga daemon is running for each interface run the show interface command
-        # to get information about the most recent interface change.
-        if quagga_status:
-            for interface in interfaces.keys():
-                command = "sudo vtysh -c 'show interface %s'" % interface
-                quagga_show_int_output = self._send_command(command)
-                # Get the link up and link down datetimes if available.
-                for line in quagga_show_int_output.splitlines():
-                    if 'Link ups' in line:
-                        if '(never)' in line.split()[4]:
-                            last_flapped_1 = False
-                        else:
-                            last_flapped_1 = True
-                            last_flapped_1_date = line.split()[4] + " " + line.split()[5]
-                            last_flapped_1_date = datetime.strptime(
-                                                last_flapped_1_date, "%Y/%m/%d %H:%M:%S.%f")
-                    if 'Link downs' in line:
-                        if '(never)' in line.split()[4]:
-                            last_flapped_2 = False
-                        else:
-                            last_flapped_2 = True
-                            last_flapped_2_date = line.split()[4] + " " + line.split()[5]
-                            last_flapped_2_date = datetime.strptime(
-                                                last_flapped_2_date, "%Y/%m/%d %H:%M:%S.%f")
-                # Compare the link up and link down datetimes to determine the most recent and
-                # set that as the last flapped after converting to seconds.
-                if last_flapped_1 and last_flapped_2:
-                    last_delta = last_flapped_1_date - last_flapped_2_date
-                    if last_delta.days >= 0:
-                        last_flapped = last_flapped_1_date
-                    else:
-                        last_flapped = last_flapped_2_date
-                elif last_flapped_1:
-                    last_flapped = last_flapped_1_date
-                elif last_flapped_2:
-                    last_flapped = last_flapped_2_date
-                else:
-                    last_flapped = -1
-
-                if last_flapped != -1:
-                    # Get remote timezone.
-                    tmz = self.device.send_command('date +"%Z"')
-                    now_time = datetime.now(timezone(tmz))
-                    last_flapped = last_flapped.replace(tzinfo=timezone(tmz))
-                    last_flapped = (now_time - last_flapped).total_seconds()
-                interfaces[interface]['last_flapped'] = float(last_flapped)
-        # If quagga daemon isn't running set all last_flapped values to -1.
-        if not quagga_status:
+        # Calculate last interface flap time. Dependent on router daemon
+        # Send command to determine if router daemon is running. Not dependent on quagga or frr
+        daemon_check = self._send_command("sudo vtysh -c 'show version'")
+        if 'Exiting: failed to connect to any daemons.' in daemon_check:
             for interface in interfaces.keys():
                 interfaces[interface]['last_flapped'] = -1
+        else:
+            show_int_output = self._send_command("sudo vtysh -c 'show interface'")
+            remote_system_date = self._send_command('date "+%Y/%m/%d %H:%M:%S.%6N"')
+            remote_system_date = datetime.strptime(remote_system_date, "%Y/%m/%d %H:%M:%S.%f")
+            split_int_output = list(filter(None, re.split("(?!Interface Type)Interface", show_int_output)))
+            for block in split_int_output:
+                split_block = block.split("\n")
+                for line in split_block:
+                    if 'line protocol' in line:
+                        interface = line.split()
+                        interface = interface[0]
+                    if 'Link ups' in line:
+                        if int(line.split()[2]) < 2:
+                            never_flapped = True
+                            break
+                        else:
+                            never_flapped = False
+                            last_link_up_date = line.split()[4] + " " + line.split()[5]
+                            last_link_up_date = datetime.strptime(last_link_up_date, "%Y/%m/%d %H:%M:%S.%f")
+                    else: 
+                        never_flapped = False
+                        if 'Link downs' in line:
+                            last_link_down_date = line.split()[4] + " " + line.split()[5]
+                            last_link_down_date = datetime.strptime(last_link_down_date, "%Y/%m/%d %H:%M:%S.%f")
+                if never_flapped:
+                    interfaces[interface]['last_flapped'] = -1
+                else:
+                    if last_link_up_date > last_link_down_date:
+                        interfaces[interface]['last_flapped']  = (remote_system_date - last_link_up_date).total_seconds()
+                    else:
+                        interfaces[interface]['last_flapped']  = (remote_system_date - last_link_down_date).total_seconds()
         return interfaces
 
     def get_interfaces_ip(self):
+        interfaces_ip = {}
         # Get net show interface all json output.
-        output = self._send_command('sudo net show interface all json')
+        output = self._send_command('net show interface all json')
         # Handling bad send_command_timing return output.
         try:
             output_json = json.loads(output)
         except ValueError:
-            output_json = json.loads(self.device.send_command('sudo net show interface all json'))
-
-        def rec_dd(): return defaultdict(rec_dd)
-        interfaces_ip = rec_dd()
-
+            output_json = json.loads(self.device.send_command('net show interface all json'))
         for interface in output_json:
             if not output_json[interface]['iface_obj']['ip_address']['allentries']:
                 continue
@@ -509,7 +474,7 @@ class CumulusDriver(NetworkDriver):
                     ip_ver = ipaddress.ip_interface(py23_compat.text_type(ip_address)).version
                     ip_ver = 'ipv{}'.format(ip_ver)
                     ip, prefix = ip_address.split('/')
-                    interfaces_ip[interface][ip_ver][ip] = {'prefix_length': int(prefix)}
+                    interfaces_ip.update({interface: {ip_ver: {ip: {'prefix_length': int(prefix)}}}})
 
         return interfaces_ip
 
