@@ -639,3 +639,13 @@ class CumulusDriver(NetworkDriver):
         snmp_information["location"] = location
 
         return snmp_information
+
+    def cli(self, commands):
+        cli_output = {}
+        if type(commands) is not list:
+            raise TypeError('Please enter a valid list of commands!')
+
+        for command in commands:
+            output = self.device.send_command(command)
+            cli_output[command] = output
+        return cli_output
