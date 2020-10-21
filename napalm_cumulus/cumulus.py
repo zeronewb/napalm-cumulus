@@ -398,10 +398,9 @@ class CumulusDriver(NetworkDriver):
                 self.device.send_command("net show interface all json")
             )
         # Determine the current time on the system, to be used when determining the last flap
-        current_time = self._send_command("date +'%a %d %b %Y %I:%M:%S %p %Z'")
-        current_time = datetime.strptime(
-            current_time.rstrip(" "), "%a %d %b %Y %I:%M:%S %p %Z"
-        )
+        date_format = "%Y/%m/%d %H:%M:%S"
+        current_time = self._send_command("date '+{}'".format(date_format))
+        current_time = datetime.strptime(current_time.strip(), date_format)
         for interface, iface_data in output_json.items():
             interfaces[interface] = {
                 "description": iface_data["iface_obj"]["description"],
@@ -489,7 +488,7 @@ class CumulusDriver(NetworkDriver):
 
         return interfaces_ip
 
-    def get_config(self, retrieve="all", full=False):
+    def get_config(self, retrieve="all", full=False, sanitized=False):
         # Initialise the configuration dictionary
         configuration = {"startup": "", "running": "", "candidate": ""}
 
