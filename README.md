@@ -63,4 +63,4 @@
 
 ☐ get_firewall_policies
 
-☐ get_vlans
+☑ get_vlans

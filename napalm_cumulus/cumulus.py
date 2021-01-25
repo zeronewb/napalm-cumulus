@@ -653,3 +653,31 @@ class CumulusDriver(NetworkDriver):
             output = self.device.send_command(command)
             cli_output[command] = output
         return cli_output
+
+    def get_vlans(self):
+        """Cumulus get_vlans."""
+        result = {}
+        command = "net show bridge vlan json"
+
+        try:
+            output = json.loads(self._send_command(command))
+        except ValueError:
+            output = json.loads(self.device.send_command(command))
+
+        for intf, data in output.items():
+            for elem in data:
+                if "vlanEnd" in elem:
+                    start = elem["vlan"]
+                    end = elem["vlanEnd"] + 1
+                    vlans = range(start, end)
+                else:
+                    vlans = [elem["vlan"], ]
+                for vlan in vlans:
+                    if vlan not in result:
+                        result[vlan] = {
+                            "name": f"vlan{vlan}",
+                            "interfaces": [intf, ]
+                        }
+                    else:
+                        result[vlan]["interfaces"].append(intf)
+        return result
