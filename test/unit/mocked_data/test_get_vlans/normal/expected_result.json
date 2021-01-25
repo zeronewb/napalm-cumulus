@@ -1,0 +1,83 @@
+{
+	"1": {
+		"name": "vlan1",
+		"interfaces": [
+			"bridge",
+			"peerlink"
+		]
+	},
+	"10": {
+		"name": "vlan10",
+		"interfaces": [
+			"peerlink",
+    		"swp9"
+		]
+	},
+	"11": {
+		"name": "vlan11",
+		"interfaces": [
+			"peerlink",
+			"bond7",
+    		"swp9",
+    		"swp1",
+    		"swp37"
+		]
+	},
+	"12": {
+		"name": "vlan12",
+		"interfaces": [
+			"bridge",
+			"peerlink",
+    		"swp9"
+		]
+	},
+	"13": {
+		"name": "vlan13",
+		"interfaces": [
+			"peerlink",
+			"bond7",
+    		"swp9",
+    		"swp1"
+		]
+	},
+	"19": {
+		"name": "vlan19",
+		"interfaces": [
+			"peerlink",
+			"bond7",
+    		"swp9",
+    		"swp1"
+		]
+	},
+	"20": {
+		"name": "vlan20",
+		"interfaces": [
+			"peerlink",
+    		"swp9"
+		]
+	},
+	"22": {
+		"name": "vlan22",
+		"interfaces": [
+			"peerlink",
+			"bond7",
+    		"swp9"
+		]
+	},
+	"32": {
+		"name": "vlan32",
+		"interfaces": [
+			"bridge",
+			"peerlink",
+    		"swp9"
+		]
+	},
+	"100": {
+		"name": "vlan100",
+		"interfaces": [
+			"bridge",
+			"peerlink",
+    		"swp9"
+		]
+	}
+}

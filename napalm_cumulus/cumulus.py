@@ -20,6 +20,7 @@ Read https://napalm.readthedocs.io for more information.
 import re
 import json
 import ipaddress
+import socket
 from datetime import datetime
 from collections import defaultdict
 
@@ -86,7 +87,21 @@ class CumulusDriver(NetworkDriver):
         self.device.disconnect()
 
     def is_alive(self):
-        return {"is_alive": self.device.remote_conn.transport.is_active()}
+        """Returns a flag with the state of the SSH connection."""
+        null = chr(0)
+        if self.device is None:
+            return {'is_alive': False}
+        try:
+            # Try sending ASCII null byte to maintain the connection alive
+            self.device.write_channel(null)
+            return {'is_alive': self.device.remote_conn.transport.is_active()}
+        except (socket.error, EOFError):
+            # If unable to send, we can tell for sure that the connection is unusable
+            return {'is_alive': False}
+        return {
+            'is_alive': self.device.remote_conn.transport.is_active()
+        }
+
 
     def load_merge_candidate(self, filename=None, config=None):
         if not filename and not config:
@@ -638,3 +653,31 @@ class CumulusDriver(NetworkDriver):
             output = self.device.send_command(command)
             cli_output[command] = output
         return cli_output
+
+    def get_vlans(self):
+        """Cumulus get_vlans."""
+        result = {}
+        command = "net show bridge vlan json"
+
+        try:
+            output = json.loads(self._send_command(command))
+        except ValueError:
+            output = json.loads(self.device.send_command(command))
+
+        for intf, data in output.items():
+            for elem in data:
+                if "vlanEnd" in elem:
+                    start = elem["vlan"]
+                    end = elem["vlanEnd"] + 1
+                    vlans = range(start, end)
+                else:
+                    vlans = [elem["vlan"], ]
+                for vlan in vlans:
+                    if vlan not in result:
+                        result[vlan] = {
+                            "name": f"vlan{vlan}",
+                            "interfaces": [intf, ]
+                        }
+                    else:
+                        result[vlan]["interfaces"].append(intf)
+        return result

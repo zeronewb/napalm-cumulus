@@ -1,0 +1,107 @@
+{
+    "bridge": [
+        {
+            "vlan": 1
+        }, 
+        {
+            "vlan": 12
+        }, 
+        {
+            "vlan": 32
+        }, 
+        {
+            "vlan": 100
+        }
+    ], 
+    "peerlink": [
+        {
+            "vlan": 1, 
+            "flags": [
+                "PVID", 
+                "Egress Untagged"
+            ]
+        }, 
+        {
+            "vlanEnd": 13, 
+            "vlan": 10
+        }, 
+        {
+            "vlanEnd": 20, 
+            "vlan": 19
+        }, 
+        {
+            "vlan": 22
+        }, 
+        {
+            "vlan": 32
+        }, 
+        {
+            "vlan": 100
+        }
+    ], 
+    "bond7": [
+        {
+            "vlan": 11, 
+            "flags": [
+                "PVID", 
+                "Egress Untagged"
+            ]
+        }, 
+        {
+            "vlan": 13
+        }, 
+        {
+            "vlan": 19
+        }, 
+        {
+            "vlan": 22
+        }
+    ], 
+    "swp9": [
+        {
+            "vlanEnd": 13, 
+            "vlan": 10
+        }, 
+        {
+            "vlanEnd": 20, 
+            "vlan": 19
+        }, 
+        {
+            "vlan": 22, 
+            "flags": [
+                "PVID", 
+                "Egress Untagged"
+            ]
+        }, 
+        {
+            "vlan": 32
+        }, 
+        {
+            "vlan": 100
+        }
+    ], 
+    "swp1": [
+        {
+            "vlan": 11, 
+            "flags": [
+                "PVID", 
+                "Egress Untagged"
+            ]
+        }, 
+        {
+            "vlan": 13
+        }, 
+        {
+            "vlan": 19
+        }
+    ], 
+    "swp37": [
+        {
+            "vlan": 11, 
+            "flags": [
+                "PVID", 
+                "Egress Untagged"
+            ]
+        }
+    ] 
+}
