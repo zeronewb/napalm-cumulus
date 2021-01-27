@@ -33,7 +33,7 @@
 
 ☑ get_interfaces_ip
 
-☐ get_mac_address_table
+☑ get_mac_address_table
 
 ☐ get_route_to
 

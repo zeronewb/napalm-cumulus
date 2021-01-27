@@ -1,0 +1,47 @@
+[
+  {
+    "mac": "00:50:79:66:68:02",
+    "interface": "swp1",
+    "vlan": 2,
+    "static": false,
+    "active": true,
+    "moves": 0,
+    "last_move": 0.0
+  },
+  {
+    "mac": "00:50:79:66:68:03",
+    "interface": "swp2",
+    "vlan": 3,
+    "static": true,
+    "active": true,
+    "moves": 0,
+    "last_move": 0.0
+  },
+  {
+    "mac": "00:50:79:66:68:01",
+    "interface": "swp10",
+    "vlan": 3,
+    "static": false,
+    "active": true,
+    "moves": 0,
+    "last_move": 0.0
+  },
+  {
+    "mac": "00:50:79:66:68:00",
+    "interface": "swp10",
+    "vlan": 2,
+    "static": false,
+    "active": true,
+    "moves": 0,
+    "last_move": 0.0
+  },
+  {
+    "mac": "44:38:39:00:00:0a",
+    "interface": "swp10",
+    "vlan": 1,
+    "static": false,
+    "active": true,
+    "moves": 0,
+    "last_move": 0.0
+  }
+]

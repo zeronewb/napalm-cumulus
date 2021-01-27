@@ -681,3 +681,30 @@ class CumulusDriver(NetworkDriver):
                     else:
                         result[vlan]["interfaces"].append(intf)
         return result
+
+    def get_mac_address_table(self):
+        result = []
+        command = "net show bridge macs json"
+
+        try:
+            output = json.loads(self._send_command(command))
+        except ValueError:
+            output = json.loads(self.device.send_command(command))
+
+        for entry in output:
+            static = False
+            if "state" in entry:
+                if entry["state"] == "static":
+                    static = True
+                else:
+                    continue
+            result.append({
+                "mac": entry["mac"],
+                "interface": entry["dev"],
+                "vlan": entry["vlan"],
+                "static": static,
+                "active": True,
+                "moves": 0,
+                "last_move": 0.0
+            })
+        return result
