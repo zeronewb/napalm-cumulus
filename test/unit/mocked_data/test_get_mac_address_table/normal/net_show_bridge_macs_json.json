@@ -1,0 +1,75 @@
+[
+  {
+    "updated": 0,
+    "used": 0,
+    "vlan": 2,
+    "dev": "swp1",
+    "mac": "00:50:79:66:68:02",
+    "master": "bridge"
+  },
+  {
+    "updated": 228,
+    "used": 228,
+    "state": "permanent",
+    "dev": "swp1",
+    "mac": "44:38:39:00:01:01",
+    "master": "bridge"
+  },
+  {
+    "updated": 40,
+    "used": 40,
+    "vlan": 3,
+    "state": "static",
+    "dev": "swp2",
+    "mac": "00:50:79:66:68:03",
+    "master": "bridge"
+  },
+  {
+    "updated": 228,
+    "used": 228,
+    "state": "permanent",
+    "dev": "swp2",
+    "mac": "44:38:39:00:01:02",
+    "master": "bridge"
+  },
+  {
+    "updated": 0,
+    "used": 0,
+    "vlan": 3,
+    "dev": "swp10",
+    "mac": "00:50:79:66:68:01",
+    "master": "bridge"
+  },
+  {
+    "updated": 0,
+    "used": 0,
+    "vlan": 2,
+    "dev": "swp10",
+    "mac": "00:50:79:66:68:00",
+    "master": "bridge"
+  },
+  {
+    "updated": 0,
+    "used": 228,
+    "vlan": 1,
+    "dev": "swp10",
+    "mac": "44:38:39:00:00:0a",
+    "master": "bridge"
+  },
+  {
+    "updated": 228,
+    "used": 228,
+    "state": "permanent",
+    "dev": "swp10",
+    "mac": "44:38:39:00:01:0a",
+    "master": "bridge"
+  },
+  {
+    "updated": 228,
+    "used": 228,
+    "state": "permanent",
+    "dev": "swp11",
+    "mac": "44:38:39:00:01:0b",
+    "master": "bridge"
+  }
+]
