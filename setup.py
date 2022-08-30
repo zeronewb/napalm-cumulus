@@ -1,17 +1,13 @@
 """setup.py file."""
-import uuid
-try:  # for pip >= 10
-    from pip._internal.req import parse_requirements
-except ImportError:  # for pip <= 9.0.3
-    from pip.req import parse_requirements
+from setuptools import setup, find_packages
+from os.path import abspath, dirname, join
 
-from setuptools import find_packages, setup
+this_dir = abspath(dirname(__file__))
+with open(join(this_dir, "requirements.txt")) as f:
+    requirements = f.read().split("\n")
 
 
 __author__ = 'Shem Valentine <shem.valentine@vivint.com>'
-
-install_reqs = parse_requirements('requirements.txt', session=uuid.uuid1())
-reqs = [str(ir.req) for ir in install_reqs]
 
 
 setup(
@@ -30,5 +26,5 @@ setup(
     ],
     url="https://source.vivint.com/projects/POPS/repos/napalm-cumulus/browse",
     include_package_data=True,
-    install_requires=reqs,
+    install_requires=requirements,
 )
